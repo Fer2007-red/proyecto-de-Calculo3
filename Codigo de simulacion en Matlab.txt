@@ -1,0 +1,122 @@
+
+
+
+perfiles = VideoWriter.getProfiles();
+nombres_perfiles = {perfiles.Name};
+
+if ismember('MPEG-4', nombres_perfiles)
+    nombre_video = 'animacion_integral_polar.mp4';
+    v = VideoWriter(nombre_video, 'MPEG-4');
+    v.Quality = 95;
+else
+
+    nombre_video = 'animacion_integral_polar.avi';
+    v = VideoWriter(nombre_video, 'Motion JPEG AVI');
+    v.Quality = 95;
+end
+
+v.FrameRate = 24;
+open(v);
+
+% Parámetros del problema
+R_max = 2;                  % Radio del disco (m)
+N_r = 12;                   % Subdivisiones radiales para visualizar elementos dA
+N_theta = 36;               % Subdivisiones angulares (cada 10 grados)
+r_vec = linspace(0, R_max, N_r + 1);
+theta_vec = linspace(0, 2*pi, N_theta + 1);
+
+% Configuración de la ventana de video 
+fig = figure('Color', [0.07 0.09 0.15], 'Position', [100, 100, 1280, 720]);
+fprintf('Renderizando video (%s)... Por favor espere.\n', nombre_video);
+
+% Recorrido progresivo del ángulo theta (de 1 a N_theta sectores)
+for k_th = 1:N_theta
+    clf(fig);
+    
+    % Submalla acumulada hasta el paso actual k_th
+    [R_grid, TH_grid] = meshgrid(r_vec, theta_vec(1:k_th+1));
+    X_grid = R_grid .* cos(TH_grid);
+    Y_grid = R_grid .* sin(TH_grid);
+    Z_grid = R_grid.^2; % Función de densidad rho(r,theta) = r^2
+    
+    % Cálculo de la masa acumulada hasta el ángulo actual
+    theta_actual = theta_vec(k_th+1);
+    masa_acumulada = 4 * theta_actual; % Integral interna vale 4, multiplicada por theta
+    porcentaje = (theta_actual / (2*pi)) * 100;
+    
+    % --- PANEL IZQUIERDO: Región Polar 2D y Elementos Diferenciales dA = r dr dtheta ---
+    ax1 = subplot(1, 2, 1, 'Parent', fig);
+    hold(ax1, 'on');
+    
+    % Dibujar contorno guía del disco completo
+    th_full = linspace(0, 2*pi, 100);
+    plot(ax1, R_max*cos(th_full), R_max*sin(th_full), '--', 'Color', [0.5 0.6 0.7], 'LineWidth', 1.5);
+    
+    % Graficar los sectores polares acumulados
+    surf(ax1, X_grid, Y_grid, zeros(size(X_grid)), Z_grid, ...
+        'EdgeColor', [0.85 0.9 1], 'LineWidth', 0.6, 'FaceColor', 'interp');
+    view(ax1, 2);
+    axis(ax1, 'equal');
+    xlim(ax1, [-2.4 2.4]); ylim(ax1, [-2.4 2.4]);
+    colormap(ax1, 'turbo');
+    caxis(ax1, [0 4]);
+    
+    % Destacar el último sector diferencial activo (r dr dtheta)
+    r_elem = [r_vec(end-1), r_vec(end), r_vec(end), r_vec(end-1)];
+    th_elem = [theta_vec(k_th), theta_vec(k_th), theta_vec(k_th+1), theta_vec(k_th+1)];
+    patch(ax1, r_elem.*cos(th_elem), r_elem.*sin(th_elem), [1 1 1], ...
+        'EdgeColor', 'w', 'LineWidth', 2, 'FaceAlpha', 0.4);
+    
+    set(ax1, 'Color', [0.1 0.13 0.2], 'XColor', 'w', 'YColor', 'w', 'FontSize', 11);
+    title(ax1, {'1. Región Polar 2D y Elementos dA = r dr d\theta', ...
+        sprintf('Barrido angular: \\theta = %.2f rad (%.0f^\\circ)', theta_actual, rad2deg(theta_actual))}, ...
+        'Color', 'w', 'FontSize', 13, 'FontWeight', 'bold');
+    xlabel(ax1, 'Posición X (m)', 'Color', 'w');
+    ylabel(ax1, 'Posición Y (m)', 'Color', 'w');
+    grid(ax1, 'on');
+    
+    % --- PANEL DERECHO: Acumulación 3D de la Integral Doble ---
+    ax2 = subplot(1, 2, 2, 'Parent', fig);
+    hold(ax2, 'on');
+    
+    % Malla fantasma de referencia completa
+    [R_ref, TH_ref] = meshgrid(linspace(0, R_max, 20), linspace(0, 2*pi, 40));
+    mesh(ax2, R_ref.*cos(TH_ref), R_ref.*sin(TH_ref), R_ref.^2, ...
+        'EdgeColor', [0.25 0.3 0.4], 'FaceAlpha', 0);
+    
+    % Superficie 3D acumulada
+    surf(ax2, X_grid, Y_grid, Z_grid, Z_grid, ...
+        'EdgeColor', [0.9 0.95 1], 'LineWidth', 0.5, 'FaceAlpha', 0.9);
+    
+    view(ax2, [-38, 28]);
+    xlim(ax2, [-2.2 2.2]); ylim(ax2, [-2.2 2.2]); zlim(ax2, [0 4.5]);
+    colormap(ax2, 'turbo');
+    caxis(ax2, [0 4]);
+    cb = colorbar(ax2, 'Color', 'w');
+    cb.Label.String = 'Densidad \rho(r,\theta) = r^2 (kg/m^2)';
+    cb.Label.FontSize = 11;
+    
+    set(ax2, 'Color', [0.1 0.13 0.2], 'XColor', 'w', 'YColor', 'w', 'ZColor', 'w', 'FontSize', 11);
+    title(ax2, {'2. Acumulación de la Integral Doble: \int_0^{\theta} \int_0^2 r^2 \cdot r dr d\theta', ...
+        sprintf('Masa Acumulada = %.2f kg (%.0f%% de 8\\pi \\approx 25.13 kg)', masa_acumulada, porcentaje)}, ...
+        'Color', [0.4 0.95 0.6], 'FontSize', 13, 'FontWeight', 'bold');
+    xlabel(ax2, 'X (m)', 'Color', 'w');
+    ylabel(ax2, 'Y (m)', 'Color', 'w');
+    zlabel(ax2, 'Densidad \rho = r^2 (kg/m^2)', 'Color', 'w');
+    grid(ax2, 'on');
+    
+    % Capturar fotograma y ajustar dimensiones por si la pantalla es menor a 1280x720
+    drawnow;
+    frame = getframe(fig);
+    for rep = 1:3
+        writeVideo(v, frame);
+    end
+end
+
+% Mantener el cuadro final durante 2 segundos para lectura del público
+for pause_frames = 1:48
+    writeVideo(v, frame);
+end
+
+close(v);
+fprintf('¡Video generado con éxito! Archivo guardado como: %s\n', fullfile(pwd, nombre_video));
